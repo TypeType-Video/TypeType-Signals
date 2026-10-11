@@ -115,6 +115,8 @@ steps:
     depends_on: [wait-docker, prepare]
     when:
       - event: push
+        branch: dev
+      - event: push
         branch: main
       - event: tag
       - event: manual
