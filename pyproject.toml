@@ -1,0 +1,41 @@
+[project]
+name = "typetype-recommender"
+version = "0.0.1"
+description = "Home feed algorithms for TypeType, chosen by the people who use them."
+license = "AGPL-3.0-only"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi==0.115.0",
+    "uvicorn[standard]==0.30.6",
+    "pydantic==2.9.2",
+    "numpy>=1.26,<3",
+    "onnxruntime==1.19.2",
+    "tokenizers==0.23.2",
+    "huggingface-hub>=1.33.0",
+    "psycopg[binary,pool]>=3.2,<4",
+    "pgvector>=0.3,<1",
+    "redis>=5,<7",
+    "msgspec>=0.18,<1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==8.3.3",
+    "httpx==0.27.2",
+    "ruff==0.6.9",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# ANN: what a function takes and gives is typed (the tests may skip it).
+select = ["E", "F", "I", "B", "UP", "SIM", "ANN001", "ANN201", "ANN202", "ANN205", "ANN206"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
