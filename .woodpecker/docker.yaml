@@ -1,0 +1,194 @@
+clone:
+  git:
+    image: woodpeckerci/plugin-git:2.10.0
+    settings:
+      partial: false
+      depth: 0
+
+when:
+  - event: push
+    branch: [dev, main]
+  - event: tag
+  - event: manual
+
+services:
+  docker:
+    image: docker:29.1.3-dind@sha256:64d6ee47ea821c986467199baa162f5ac8cde3f57b719f18e23f3ed7a7444131
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    commands:
+      - dockerd-entrypoint.sh --host=tcp://0.0.0.0:2375 --tls=false --insecure-registry=registry:5000
+
+steps:
+  - name: wait-docker
+    image: docker:29.1.3-cli@sha256:e0b6ff45302985d99b9685b2a2fec50c3379bd47067493968f51da901dc53ad5
+    environment:
+      DOCKER_HOST: tcp://docker:2375
+    commands:
+      - |
+        for attempt in $$(seq 1 60); do
+          if docker info >/dev/null 2>&1; then
+            exit 0
+          fi
+          sleep 1
+        done
+        exit 1
+
+  - name: prepare
+    image: docker:29.1.3-cli@sha256:e0b6ff45302985d99b9685b2a2fec50c3379bd47067493968f51da901dc53ad5
+    commands:
+      - |
+        set -eu
+        base_version="$$(sed -n 's/^version = "\([^"]*\)".*/\1/p' pyproject.toml | head -n1)"
+        event="$${CI_PIPELINE_EVENT}"
+        branch="$${CI_COMMIT_BRANCH:-}"
+        tag_name="$${CI_COMMIT_TAG:-}"
+
+        if [ "$${event}" = "tag" ]; then
+          version="$${tag_name#v}"
+          local_repo=registry:5000/typetype/signals
+          ghcr_repo=ghcr.io/typetype-video/typetype-signals
+          tags="$${version} $${tag_name} latest"
+        elif [ "$${branch}" = "dev" ]; then
+          version="$${base_version}-dev.$${CI_PIPELINE_NUMBER}"
+          local_repo=registry:5000/typetype/signals-beta
+          ghcr_repo=ghcr.io/typetype-video/typetype-signals-beta
+          tags="dev beta latest $${version}"
+        else
+          version="$${base_version}"
+          local_repo=registry:5000/typetype/signals
+          ghcr_repo=ghcr.io/typetype-video/typetype-signals
+          tags="main latest $${version}"
+        fi
+
+        {
+          printf "VERSION='%s'\n" "$${version}"
+          printf "LOCAL_REPO='%s'\n" "$${local_repo}"
+          printf "GHCR_REPO='%s'\n" "$${ghcr_repo}"
+          printf "TAGS='%s'\n" "$${tags}"
+        } > .woodpecker-publish.env
+
+  - name: publish-amd64
+    image: docker:29.1.3-cli@sha256:e0b6ff45302985d99b9685b2a2fec50c3379bd47067493968f51da901dc53ad5
+    depends_on: [wait-docker, prepare]
+    environment:
+      DOCKER_HOST: tcp://docker:2375
+      GHCR_USER:
+        from_secret: ghcr_username
+      GHCR_TOKEN:
+        from_secret: ghcr_token
+    commands:
+      - |
+        set -eu
+        set -a
+        . ./.woodpecker-publish.env
+        set +a
+        build_time="$$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        printf '%s' "$${GHCR_TOKEN}" |
+          docker login ghcr.io -u "$${GHCR_USER}" --password-stdin
+
+        docker build --pull --platform linux/amd64 \
+          --provenance=false --sbom=false \
+          --build-arg "REVISION=$${CI_COMMIT_SHA}" \
+          --build-arg "BUILD_TIME=$${build_time}" \
+          -t "$${LOCAL_REPO}:$${VERSION}" .
+
+        for tag in $${TAGS}; do
+          docker tag "$${LOCAL_REPO}:$${VERSION}" "$${LOCAL_REPO}:$${tag}"
+          docker tag "$${LOCAL_REPO}:$${VERSION}" "$${LOCAL_REPO}:$${tag}-amd64"
+          docker tag "$${LOCAL_REPO}:$${VERSION}" "$${GHCR_REPO}:$${tag}"
+          docker tag "$${LOCAL_REPO}:$${VERSION}" "$${GHCR_REPO}:$${tag}-amd64"
+        done
+
+        for tag in $${TAGS}; do
+          docker push "$${LOCAL_REPO}:$${tag}"
+          docker push "$${LOCAL_REPO}:$${tag}-amd64"
+          docker push "$${GHCR_REPO}:$${tag}"
+          docker push "$${GHCR_REPO}:$${tag}-amd64"
+        done
+
+        echo "Published $${VERSION} for linux/amd64"
+
+  - name: publish-arm64
+    image: docker:29.1.3-cli@sha256:e0b6ff45302985d99b9685b2a2fec50c3379bd47067493968f51da901dc53ad5
+    depends_on: [wait-docker, prepare]
+    when:
+      - event: push
+        branch: main
+      - event: tag
+      - event: manual
+        branch: main
+    environment:
+      DOCKER_HOST: tcp://docker:2375
+      GHCR_USER:
+        from_secret: ghcr_username
+      GHCR_TOKEN:
+        from_secret: ghcr_token
+    commands:
+      - |
+        set -eu
+        set -a
+        . ./.woodpecker-publish.env
+        set +a
+        build_time="$$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        printf '%s' "$${GHCR_TOKEN}" |
+          docker login ghcr.io -u "$${GHCR_USER}" --password-stdin
+
+        docker build --pull --platform linux/arm64 \
+          --provenance=false --sbom=false \
+          --build-arg "REVISION=$${CI_COMMIT_SHA}" \
+          --build-arg "BUILD_TIME=$${build_time}" \
+          -t "$${LOCAL_REPO}:$${VERSION}-arm64" .
+
+        for tag in $${TAGS}; do
+          docker tag "$${LOCAL_REPO}:$${VERSION}-arm64" "$${LOCAL_REPO}:$${tag}-arm64"
+          docker tag "$${LOCAL_REPO}:$${VERSION}-arm64" "$${GHCR_REPO}:$${tag}-arm64"
+        done
+
+        for tag in $${TAGS}; do
+          docker push "$${LOCAL_REPO}:$${tag}-arm64"
+          docker push "$${GHCR_REPO}:$${tag}-arm64"
+        done
+
+        echo "Published $${VERSION} for linux/arm64"
+
+  - name: publish-manifest
+    image: docker:29.1.3-cli@sha256:e0b6ff45302985d99b9685b2a2fec50c3379bd47067493968f51da901dc53ad5
+    depends_on: [publish-amd64, publish-arm64]
+    when:
+      - event: push
+        branch: main
+      - event: tag
+      - event: manual
+        branch: main
+    environment:
+      DOCKER_HOST: tcp://docker:2375
+      GHCR_USER:
+        from_secret: ghcr_username
+      GHCR_TOKEN:
+        from_secret: ghcr_token
+    commands:
+      - |
+        set -eu
+        set -a
+        . ./.woodpecker-publish.env
+        set +a
+        printf '%s' "$${GHCR_TOKEN}" |
+          docker login ghcr.io -u "$${GHCR_USER}" --password-stdin
+
+        for tag in $${TAGS}; do
+          docker manifest create --amend --insecure \
+            "$${LOCAL_REPO}:$${tag}" \
+            "$${LOCAL_REPO}:$${tag}-amd64" \
+            "$${LOCAL_REPO}:$${tag}-arm64"
+          docker manifest push --purge --insecure "$${LOCAL_REPO}:$${tag}"
+
+          docker manifest create --amend \
+            "$${GHCR_REPO}:$${tag}" \
+            "$${GHCR_REPO}:$${tag}-amd64" \
+            "$${GHCR_REPO}:$${tag}-arm64"
+          docker manifest push --purge "$${GHCR_REPO}:$${tag}"
+        done
+
+        echo "Published $${VERSION} manifest for linux/amd64 and linux/arm64"
