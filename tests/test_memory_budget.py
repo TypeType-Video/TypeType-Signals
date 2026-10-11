@@ -29,7 +29,7 @@ import gc, json, os, sys
 os.environ["RECOMMENDER_EMBEDDER"] = "hashing"
 sys.path.insert(0, ".")
 from tests.test_scale import big_snapshot
-from recommender import engine, between_requests
+from recommender import engine, history_cache
 from recommender.contract import HistoryUpload, Snapshot
 from recommender.contract_rank import RankRequest
 
@@ -51,7 +51,7 @@ for user, text in enumerate(texts):
     if by_key:  # sent once, as the history changes; pages name it
         whole = Snapshot.model_validate_json(text)
         key = f"u{user}"
-        between_requests.remember_history(
+        history_cache.remember_history(
             HistoryUpload(key=key, history=whole.history, favorites=whole.favorites)
         )
         empty = {"history": [], "favorites": [], "history_key": key}

@@ -1,6 +1,8 @@
 """A person's profile is worked out once while their history has not changed."""
 
-from recommender import between_requests, engine
+from collections import OrderedDict
+
+from recommender import engine, history_cache
 from recommender.algorithms import signals as signals_module
 from recommender.contract import HistoryUpload, Snapshot
 from recommender.kept import PROFILE_SECONDS, Kept, shared_key
@@ -16,7 +18,7 @@ def _named(key: str, **fields) -> Snapshot:
 
 def test_a_second_page_of_the_same_history_does_not_read_it_again(monkeypatch):
     history = [watched(f"v{i}", f"c{i % 4}", title=f"Cooking pasta at home {i}") for i in range(20)]
-    between_requests.remember_history(HistoryUpload(key="kept-1", history=history), share=False)
+    history_cache.remember_history(HistoryUpload(key="kept-1", history=history), share=False)
     calls = []
     real = signals_module.conclude
     monkeypatch.setattr(signals_module, "conclude", lambda *args: calls.append(1) or real(*args))
@@ -56,5 +58,20 @@ def test_nothing_is_kept_while_titles_are_still_being_embedded():
     kept = Kept()
     kept.put(("key",), "profile", Busy())
     assert kept.get(("key",)) is None
+
     kept.put(("key",), "profile", object())
     assert kept.get(("key",)) == "profile"
+
+
+def test_expired_history_is_removed_on_next_request(monkeypatch):
+    now = [10.0]
+    histories = OrderedDict()
+    monkeypatch.setattr(history_cache, "_histories", histories)
+    monkeypatch.setattr(history_cache, "HISTORY_SECONDS", 30)
+    monkeypatch.setattr(history_cache.time, "monotonic", lambda: now[0])
+    history_cache._hold_history(HistoryUpload(key="idle", history=[watched("v", "c")]))
+    now[0] += 31
+
+    history_cache.with_history(snapshot("subscriptions"))
+
+    assert not histories

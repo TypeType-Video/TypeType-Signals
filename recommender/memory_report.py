@@ -7,7 +7,7 @@ import gc
 import pickle
 from pathlib import Path
 
-from . import between_requests, labels
+from . import between_requests, history_cache, labels
 from .embeddings import default_embedder
 from .kept import Kept
 
@@ -36,17 +36,16 @@ def _megabytes(thing: object) -> float:
 def _between_requests() -> dict:
     """The histories and plans held for pages in progress: how many, and the watches and
     likes they hold (what their limits count)."""
-    with between_requests._histories_lock:
-        histories = [len(h) + len(f) for _, h, f in between_requests._histories.values()]
+    histories_count, history_items, parts_count = history_cache.memory_stats()
     with between_requests._plans_lock:
         kept_plans = list(between_requests._plans.values())
     plans = [between_requests._items(snapshot) for _, snapshot in kept_plans]
     return {
-        "histories": len(histories),
-        "history_items": sum(histories),
+        "histories": histories_count,
+        "history_items": history_items,
         "plans": len(plans),
         "plan_items": sum(plans),
-        "parts": len(between_requests._parts),
+        "parts": parts_count,
     }
 
 
