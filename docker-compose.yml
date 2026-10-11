@@ -1,0 +1,45 @@
+services:
+  recommender:
+    build: .
+    restart: unless-stopped
+    environment:
+      RECOMMENDER_PORT: "${RECOMMENDER_PORT:-8190}"
+      RECOMMENDER_INTERNAL_TOKEN: ${RECOMMENDER_INTERNAL_TOKEN:-}
+      RECOMMENDER_DATABASE_URL: ${RECOMMENDER_DATABASE_URL:-postgresql://recommender:${RECOMMENDER_DATABASE_PASSWORD:-recommender}@postgres:5432/recommender}
+      RECOMMENDER_CACHE_URL: ${RECOMMENDER_CACHE_URL:-redis://cache:6379}
+      RECOMMENDER_MODEL_CACHE: /models
+    ports:
+      - "${RECOMMENDER_BIND:-127.0.0.1}:${RECOMMENDER_PORT:-8190}:${RECOMMENDER_PORT:-8190}"
+    volumes:
+      - recommender_models:/models
+    depends_on:
+      postgres:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+
+  postgres:
+    image: ${RECOMMENDER_POSTGRES_IMAGE:-pgvector/pgvector:pg17}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: recommender
+      POSTGRES_USER: recommender
+      POSTGRES_PASSWORD: ${RECOMMENDER_DATABASE_PASSWORD:-recommender}
+    volumes:
+      - recommender_database:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U recommender -d recommender"]
+      interval: 5s
+      retries: 30
+
+  cache:
+    image: ${RECOMMENDER_CACHE_IMAGE:-docker.dragonflydb.io/dragonflydb/dragonfly:v1.39.0}
+    restart: unless-stopped
+    ulimits:
+      memlock: -1
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+
+volumes:
+  recommender_models:
+  recommender_database:
