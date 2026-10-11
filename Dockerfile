@@ -18,7 +18,7 @@ COPY --from=build /app/.venv ./.venv
 COPY recommender ./recommender
 COPY LICENSE THIRD_PARTY_NOTICES.md ./
 
-ENV PATH="/app/.venv/bin:$PATH" RECOMMENDER_MODEL_CACHE=/models
+ENV PATH="/app/.venv/bin:$PATH" RECOMMENDER_MODEL_CACHE=/models HF_HOME=/models/huggingface
 ENV MALLOC_ARENA_MAX=1 MALLOC_TRIM_THRESHOLD_=65536
 ARG REVISION=unknown
 ARG BUILD_TIME=unknown
