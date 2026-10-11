@@ -64,5 +64,6 @@ after (the best of several runs, on the same machine, one after the other).
 
 ## Commits
 
+Commits follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/):
 `type: short description`, one line, imperative mood, no emoji. Types: `feat`, `fix`,
-`refactor`, `chore`, `docs`, `test`, `perf`, `style`. One concern per commit.
+`refactor`, `chore`, `docs`, `test`, `perf`, `style`, `build`, `ci`. One concern per commit.
