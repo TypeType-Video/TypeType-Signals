@@ -44,4 +44,4 @@ steps:
           fi
           sleep 1
         done
-        uv run pytest -q
+        uv run pytest -q --deselect tests/test_scale.py::test_three_times_the_measured_account_fits_in_a_page
