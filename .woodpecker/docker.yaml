@@ -1,6 +1,6 @@
 clone:
   git:
-    image: woodpeckerci/plugin-git:2.10.0
+    image: woodpeckerci/plugin-git:2.10.0@sha256:0f06b03ec33137b556c77538563f66c400339052d0c5199d4c3ad1a2a37e1964
     settings:
       partial: false
       depth: 0
