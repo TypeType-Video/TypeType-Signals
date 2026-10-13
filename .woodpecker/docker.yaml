@@ -1,6 +1,6 @@
 clone:
   git:
-    image: woodpeckerci/plugin-git:2.10.0
+    image: woodpeckerci/plugin-git:2.10.0@sha256:0f06b03ec33137b556c77538563f66c400339052d0c5199d4c3ad1a2a37e1964
     settings:
       partial: false
       depth: 0
@@ -114,6 +114,8 @@ steps:
     image: docker:29.1.3-cli@sha256:e0b6ff45302985d99b9685b2a2fec50c3379bd47067493968f51da901dc53ad5
     depends_on: [wait-docker, prepare]
     when:
+      - event: push
+        branch: dev
       - event: push
         branch: main
       - event: tag

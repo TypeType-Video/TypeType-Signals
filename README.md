@@ -70,8 +70,9 @@ It is added to the TypeType stack with one file. The steps, and how to remove it
 Every setting comes from the environment and is listed in the
 [TypeType documentation](https://typetype-video.github.io/Docs-TypeType/).
 
-What it keeps: public video titles and their vectors in its own database, and for a few
-minutes the history TypeType-Server sent, so that a page does not send it again. Your data
+What it keeps: public video titles and their vectors in its own database, and temporary
+history snapshots sent by TypeType-Server, so a page does not need to send them again.
+The default history TTL is 30 minutes and is configurable. Your data
 stays in TypeType-Server, which also fetches the videos and applies blocking and family
 filters to whatever comes back. This service only decides the order and the rows.
 

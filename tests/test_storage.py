@@ -7,7 +7,7 @@ import uuid
 import numpy as np
 import pytest
 
-from recommender import between_requests, engine, state
+from recommender import between_requests, engine, history_cache, state
 from recommender.catalogue import Catalogue, Facts
 from recommender.contract import HistoryUpload, Snapshot
 
@@ -92,12 +92,13 @@ def test_a_database_that_fails_never_takes_a_page_down():
 
 
 def _forget_locally():
-    between_requests._histories.clear()
+    history_cache._histories.clear()
     between_requests._plans.clear()
 
 
 def _shared(monkeypatch, store):
     monkeypatch.setattr(between_requests, "default_state", lambda: store)
+    monkeypatch.setattr(history_cache, "default_state", lambda: store)
     _forget_locally()
 
 
@@ -105,8 +106,8 @@ def _page_survives_a_restart(monkeypatch, store):
     _shared(monkeypatch, store)
     key = uuid.uuid4().hex
     history = [watched(f"v{i}", f"c{i % 3}") for i in range(12)]
-    between_requests._share_history(HistoryUpload(key=key, history=history))
-    between_requests._hold_history(HistoryUpload(key=key, history=history))
+    history_cache._share_history(HistoryUpload(key=key, history=history))
+    history_cache._hold_history(HistoryUpload(key=key, history=history))
     named = Snapshot.model_validate({**snapshot("signals").model_dump(), "history_key": key})
     planned = engine.plan(named)
     _forget_locally()  # the process restarts, or another instance takes the rank
@@ -127,7 +128,7 @@ def test_a_history_and_a_plan_survive_a_restart_in_the_shared_cache(monkeypatch)
 def test_without_a_shared_store_an_unknown_key_is_still_refused(monkeypatch):
     _shared(monkeypatch, None)
     named = Snapshot.model_validate({**snapshot("signals").model_dump(), "history_key": "gone"})
-    with pytest.raises(between_requests.UnknownHistory):
+    with pytest.raises(history_cache.UnknownHistory):
         engine.plan(named)
     with pytest.raises(between_requests.UnknownPlan):
         between_requests._kept("gone")
@@ -144,13 +145,13 @@ def _in_parts(monkeypatch, store):
     key = uuid.uuid4().hex
     history = [watched(f"v{i}", f"c{i % 3}") for i in range(9)]
     for part in range(3):
-        between_requests.receive_history(
+        history_cache.receive_history(
             HistoryUpload(
                 key=key, history=history[part * 3 : part * 3 + 3], part=part, last=part == 2
             )
         )
     named = Snapshot.model_validate({**snapshot("signals").model_dump(), "history_key": key})
-    kept = between_requests.with_history(named)
+    kept = history_cache.with_history(named)
     assert [item.video_url for item in kept.history] == [item.video_url for item in history]
 
 
@@ -166,5 +167,5 @@ def test_a_history_sent_in_parts_through_the_shared_cache(monkeypatch):
 
 def test_a_last_part_whose_earlier_parts_are_gone_is_refused(monkeypatch):
     _shared(monkeypatch, None)
-    with pytest.raises(between_requests.UnknownHistory):
-        between_requests.receive_history(HistoryUpload(key="lost", history=[], part=2, last=True))
+    with pytest.raises(history_cache.UnknownHistory):
+        history_cache.receive_history(HistoryUpload(key="lost", history=[], part=2, last=True))

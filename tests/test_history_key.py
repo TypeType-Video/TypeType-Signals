@@ -2,7 +2,7 @@
 
 from fastapi.testclient import TestClient
 
-from recommender import between_requests
+from recommender import history_cache
 from recommender.algorithms.signals import Signals
 from recommender.contract import HistoryUpload
 from recommender.main import app
@@ -48,11 +48,11 @@ def test_a_snapshot_bringing_its_history_under_a_key_leaves_it_for_the_next_page
 
 
 def test_histories_are_bounded_by_size_and_the_newest_is_kept(monkeypatch):
-    monkeypatch.setattr(between_requests, "HISTORY_ITEMS_KEPT", 15)
-    monkeypatch.setattr(between_requests, "_histories", type(between_requests._histories)())
+    monkeypatch.setattr(history_cache, "HISTORY_ITEMS_KEPT", 15)
+    monkeypatch.setattr(history_cache, "_histories", type(history_cache._histories)())
     for key in ("a", "b", "c"):
-        between_requests.remember_history(HistoryUpload(key=key, favorites=likes(10)))
-    assert list(between_requests._histories) == ["c"]
+        history_cache.remember_history(HistoryUpload(key=key, favorites=likes(10)))
+    assert list(history_cache._histories) == ["c"]
 
 
 def test_a_new_history_is_embedded_ahead_in_the_background():

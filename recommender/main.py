@@ -8,7 +8,7 @@ import msgspec
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 
-from . import __version__, between_requests, engine, registry
+from . import __version__, between_requests, engine, history_cache, registry
 from .contract import Plan, Snapshot, read_history_upload
 from .contract_algorithms import AlgorithmList
 from .contract_profile import Profile, TopicRequest, TopicResponse
@@ -40,7 +40,7 @@ def known[T](call: Callable[[], T]) -> T:
         return call()
     except registry.UnknownAlgorithm as error:
         raise HTTPException(status_code=404, detail=f"unknown algorithm {error}") from error
-    except between_requests.UnknownHistory as error:
+    except history_cache.UnknownHistory as error:
         raise HTTPException(
             status_code=409, detail=f"unknown or expired history {error}: send the history"
         ) from error
@@ -94,7 +94,7 @@ def _receive_history(raw: bytes) -> None:
         upload = read_history_upload(raw)
     except msgspec.MsgspecError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
-    known(lambda: between_requests.receive_history(upload))
+    known(lambda: history_cache.receive_history(upload))
 
 
 @app.post("/v1/catalogue", dependencies=[Depends(internal)])
