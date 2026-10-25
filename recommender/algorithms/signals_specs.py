@@ -37,8 +37,7 @@ WEIGHT_HELP = {
     "w_freshness": (
         "Weight of freshness",
         "Poids de la fraîcheur",
-        "How much being recent counts in the ranking. Higher, newly published videos come "
-        "first.",
+        "How much being recent counts in the ranking. Higher, newly published videos come first.",
         "Importance, dans le classement, d'être récente. Plus la valeur est haute, plus les "
         "vidéos publiées depuis peu remontent.",
         # YouTube's home leans on proven videos (median 90 days old on a real account); a

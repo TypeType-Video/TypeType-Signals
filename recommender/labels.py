@@ -18,7 +18,7 @@ STOPWORDS = set(
     j'ai c'est ça sont été être avoir chez sans entre après avant encore déjà
     el la los las con por para una uno del que más como
     yang dan di ke dari ini itu untuk dengan
-    """.split()
+    """.split()  # noqa: SIM905
 )
 MIN_TITLES = 2
 MIN_SPREAD_TITLES = 6
@@ -40,8 +40,7 @@ _MARKS = "".join(
 )
 _WORD = re.compile(f"(?:[^\\W\\d_]|[{re.escape(_MARKS)}])+")
 _UNSPACED = re.compile(
-    "[\u0e00-\u0eff\u1000-\u109f\u1780-\u17ff\u3040-\u30ff\u3400-\u4dbf"
-    "\u4e00-\u9fff\uf900-\ufaff]"
+    "[\u0e00-\u0eff\u1000-\u109f\u1780-\u17ff\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]"
 )
 _SYLLABIC = re.compile("[\u0900-\u0dff\u1100-\u11ff\uac00-\ud7af]")
 # Arabic and Hebrew vowel points are optional: the same word is written with or without them.
