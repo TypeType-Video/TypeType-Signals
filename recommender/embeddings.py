@@ -30,6 +30,7 @@ not depend on whether a title was just embedded or read back.
 """
 
 import hashlib
+import logging
 import os
 import queue
 import re
@@ -63,6 +64,7 @@ PARALLEL_BATCHES = settings.whole("RECOMMENDER_PARALLEL_BATCHES", 1)
 # after an import under 1.5 s at three times the measured account (150: up to 1.72 s).
 EMBED_BUDGET = settings.whole("RECOMMENDER_EMBED_BUDGET", 100)
 CACHE_SIZE = 50_000 if settings.text("RECOMMENDER_EMBEDDING_CACHE", "1") != "0" else 0
+logger = logging.getLogger(__name__)
 
 
 # Background embedding gives way to pages: it waits while a request is being answered, and works in
@@ -165,6 +167,11 @@ def _clean(text: str) -> str:
 
 
 class ModelEmbedder:
+    """The local ONNX model, with the cache, the shared store and the background queue every
+    embedder uses; another source of vectors only replaces `_run`."""
+
+    _dimension = 768
+
     def __init__(self):
         import onnxruntime
         from huggingface_hub import hf_hub_download
@@ -190,11 +197,13 @@ class ModelEmbedder:
             providers=["CPUExecutionProvider"],
         )
         self._inputs = {i.name for i in self._session.get_inputs()}
+        self._start(f"{REPOSITORY}/{MODEL_FILE}")
+
+    def _start(self, model: str) -> None:
+        """The state shared by every source of vectors; `model` keys their vectors in the store."""
         self._cache: OrderedDict[str, np.ndarray] = OrderedDict()
         database = default_database() if CACHE_SIZE else None
-        self._store: VectorStore | None = (
-            PostgresVectorStore(database, f"{REPOSITORY}/{MODEL_FILE}") if database else None
-        )
+        self._store: VectorStore | None = PostgresVectorStore(database, model) if database else None
         self._lock = threading.Lock()
         self._batches = threading.Semaphore(PARALLEL_BATCHES)
         self._pending: queue.Queue[str] = queue.Queue()
@@ -223,7 +232,7 @@ class ModelEmbedder:
     def embed(self, texts: list[str]) -> np.ndarray:
         cleaned = [_clean(text) for text in texts]
         if not cleaned:
-            return np.zeros((0, 768), dtype=np.float32)
+            return np.zeros((0, self._dimension), dtype=np.float32)
         with self._lock:
             ready = {t: self._cache[t] for t in dict.fromkeys(cleaned) if t in self._cache}
         missing = [t for t in dict.fromkeys(cleaned) if t not in ready]
@@ -292,9 +301,13 @@ class ModelEmbedder:
                 return
             while len(batch) < BACKGROUND_BATCH and not self._pending.empty():
                 batch.append(self._pending.get_nowait())
-            self.embed(batch)
-            with self._lock:
-                self._queued.difference_update(batch)
+            try:
+                self.embed(batch)
+            except Exception as error:  # noqa: BLE001 - a remote endpoint may fail; a later page asks again
+                logger.warning("background embedding failed for %d titles: %s", len(batch), error)
+            finally:
+                with self._lock:
+                    self._queued.difference_update(batch)
 
 
 class HashingEmbedder:
@@ -316,4 +329,11 @@ class HashingEmbedder:
 def default_embedder() -> Embedder:
     if settings.text("RECOMMENDER_EMBEDDER") == "hashing":
         return HashingEmbedder()
+    provider = settings.text("RECOMMENDER_EMBEDDING_PROVIDER", "local").lower()
+    if provider == "openai":
+        from .remote_embeddings import RemoteEmbedder
+
+        return RemoteEmbedder.from_settings()
+    if provider != "local":
+        raise ValueError(f"RECOMMENDER_EMBEDDING_PROVIDER must be local or openai, not {provider}")
     return ModelEmbedder()

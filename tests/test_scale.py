@@ -19,9 +19,21 @@ from recommender.contract import HistoryItem, VideoRef
 
 from .factories import HOUR, NOW, channel, snapshot
 
-WORDS = (
-    "forest camping winter cabin street food market noodles engine repair truck river boat".split()
-)
+WORDS = [
+    "forest",
+    "camping",
+    "winter",
+    "cabin",
+    "street",
+    "food",
+    "market",
+    "noodles",
+    "engine",
+    "repair",
+    "truck",
+    "river",
+    "boat",
+]
 
 
 def title(i: int) -> str:

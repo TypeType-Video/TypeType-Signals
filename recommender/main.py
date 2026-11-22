@@ -1,6 +1,7 @@
 """HTTP entry point. Only TypeType-Server calls it, with the shared internal token."""
 
 import hmac
+import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 
@@ -14,6 +15,7 @@ from .contract_algorithms import AlgorithmList
 from .contract_profile import Profile, TopicRequest, TopicResponse
 from .contract_rank import CatalogueStatus, CatalogueUpload, RankRequest, RankResponse
 from .embeddings import default_embedder
+from .remote_embeddings import EmbeddingError
 from .settings import secret, text
 
 TOKEN = secret("RECOMMENDER_INTERNAL_TOKEN")
@@ -21,8 +23,12 @@ TOKEN = secret("RECOMMENDER_INTERNAL_TOKEN")
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    # Load the model before the first request, so no user waits for it.
-    default_embedder().embed(["warm up"])
+    # Load the model before the first request, so no user waits for it. A remote endpoint that is
+    # down at start is not fatal: pages answer 503 until it is back.
+    try:
+        default_embedder().embed(["warm up"])
+    except EmbeddingError as error:
+        logging.getLogger(__name__).warning("embedding endpoint not ready at start: %s", error)
     yield
 
 
@@ -47,6 +53,10 @@ def known[T](call: Callable[[], T]) -> T:
     except between_requests.UnknownPlan as error:
         raise HTTPException(
             status_code=409, detail=f"unknown or expired plan {error}: send the snapshot"
+        ) from error
+    except EmbeddingError as error:
+        raise HTTPException(
+            status_code=503, detail=f"embedding endpoint failed: {error}"
         ) from error
 
 

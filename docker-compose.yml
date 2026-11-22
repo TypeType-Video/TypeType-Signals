@@ -19,7 +19,7 @@ services:
         condition: service_healthy
 
   postgres:
-    image: ${RECOMMENDER_POSTGRES_IMAGE:-pgvector/pgvector:pg17}
+    image: ${RECOMMENDER_POSTGRES_IMAGE:-pgvector/pgvector:0.8.7-pg17}
     restart: unless-stopped
     environment:
       POSTGRES_DB: recommender
@@ -33,7 +33,8 @@ services:
       retries: 30
 
   cache:
-    image: ${RECOMMENDER_CACHE_IMAGE:-docker.dragonflydb.io/dragonflydb/dragonfly:v1.39.0}
+    image: ${RECOMMENDER_CACHE_IMAGE:-docker.dragonflydb.io/dragonflydb/dragonfly:v2.0.2}
+    command: ["--noversion_check"]
     restart: unless-stopped
     ulimits:
       memlock: -1
